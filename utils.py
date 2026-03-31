@@ -16,4 +16,4 @@ def create_video(image_folder, video_name, fps=30):
     video.release()
     print(f"Video saved as {video_name}")
     
-create_video('v_Biking_g01_c01/testing_frames', 'v_Biking_g01_c01_test.mp4')
+create_video('v_Biking_g01_c01/training_frames', 'v_Biking_g01_c01_train.mp4')
