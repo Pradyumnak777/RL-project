@@ -93,9 +93,9 @@ epsilon_decay = 0.99  # Multiply epsilon by this after every video
 global_step = 0       # Tracks total actions taken across all videos
 
 
-def get_dqn_action(state_vector):
-    # For now, just pretend the DQN is guessing
-    return random.choice([0, 1, 2]) #0,1,2 are our action choices..
+# def get_dqn_action(state_vector):
+#     # For now, just pretend the DQN is guessing
+#     return random.choice([0, 1, 2]) #0,1,2 are our action choices..
 
 '''
 run a loop over the training folder/training videos
@@ -103,7 +103,9 @@ run a loop over the training folder/training videos
 stats = {
     "avg_rewards": [],
     "avg_losses": [],
-    "epsilon_history": []
+    "epsilon_history": [],
+    "survival_rates": [],          # NEW: Tracks point survival percentage
+    "action_distributions": []     # NEW: Tracks how often each action is picked
 }
 
 for vid_name in os.listdir(train_dir):
@@ -118,6 +120,7 @@ for vid_name in os.listdir(train_dir):
     
     video_rewards = []
     video_losses = []
+    video_actions = {0: 0, 1: 0, 2: 0} # NEW: Action counters for this video
     
     for t in range(producer.num_frames - 1):
         # Loop through every point in the current frame
@@ -138,6 +141,8 @@ for vid_name in os.listdir(train_dir):
             else:
                 action = get_dqn_action(state)    # Exploit (Policy)
                 
+            video_actions[action] += 1 # NEW: Log the chosen action
+            
             # 3. EXECUTE ACTION
             if action == 0: # KILL
                 active_points[p_idx] = False # Mark as dead for future frames
@@ -179,12 +184,16 @@ for vid_name in os.listdir(train_dir):
 
     avg_v_reward = np.mean(video_rewards) if video_rewards else 0
     avg_v_loss = np.mean(video_losses) if video_losses else 0
+    # NEW: Calculate how many points survived to the end of the video
+    survival_rate = np.sum(active_points) / producer.num_points if producer.num_points > 0 else 0 
     
     stats["avg_rewards"].append(avg_v_reward)
     stats["avg_losses"].append(avg_v_loss)
     stats["epsilon_history"].append(epsilon)
+    stats["survival_rates"].append(survival_rate)      # NEW
+    stats["action_distributions"].append(video_actions) # NEW
 
-    print(f"Done: {vid_name:20} | Rwd: {avg_v_reward:6.2f} | Loss: {avg_v_loss:6.4f} | Eps: {epsilon:.2f}")
+    print(f"Done: {vid_name:20} | Rwd: {avg_v_reward:6.2f} | Loss: {avg_v_loss:6.4f} | Eps: {epsilon:.2f} | Surv: {survival_rate:.2f}")
 
 import json
 with open("training_stats.json", "w") as f:
@@ -193,8 +202,3 @@ with open("training_stats.json", "w") as f:
 model_save_path = "point_tracker_dqn.pth"
 torch.save(policy_net.state_dict(), model_save_path)
 print(f"Training Complete! Model saved to {model_save_path}")
-
-    
-    
-    
-
