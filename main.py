@@ -12,7 +12,7 @@ import torch.nn.functional as F
 BATCH_SIZE = 128
 GAMMA = 0.99           # Discount factor for future rewards
 LR = 1e-4              # Learning rate
-TARGET_UPDATE = 1000   # How many steps before syncing Policy -> Target
+TARGET_UPDATE = 50000   # How many steps before syncing Policy -> Target
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 policy_net = DQN(state_dim=3, action_dim=3).to(device)
@@ -109,11 +109,11 @@ stats = {
 }
 
 for vid_name in os.listdir(train_dir):
-    vid_path = os.path.join(train_dir, vid_name)
+    # vid_path = os.path.join(train_dir, vid_name)
     
     print(f"Processing Video: {vid_name}")
     # Initialize the environment for THIS video
-    producer = pointStateProducer(vid_path)
+    producer = pointStateProducer(vid_name)
     
     # True = Alive, False = Killed by Agent or lost by OpenCV
     active_points = np.ones(producer.num_points, dtype=bool)
@@ -121,6 +121,7 @@ for vid_name in os.listdir(train_dir):
     video_rewards = []
     video_losses = []
     video_actions = {0: 0, 1: 0, 2: 0} # NEW: Action counters for this video
+    current_loss = None
     
     for t in range(producer.num_frames - 1):
         # Loop through every point in the current frame
@@ -169,20 +170,27 @@ for vid_name in os.listdir(train_dir):
             # 6. STORE IN MEMORY
             memory.push(state, action, reward, next_state, done)
             # This is the 'Robbins-Monro' step: correcting the prediction toward the target
-            current_loss = optimize_model()
+            # current_loss = optimize_model()
+            global_step += 1
+            
+            if global_step % 16 == 0: 
+                current_loss = optimize_model()
+                
             if current_loss is not None:
-                video_losses.append(current_loss) # Collect loss
+                video_losses.append(current_loss)
             
             #step additions..
-            global_step += 1
             if global_step % 1000 == 0:
                 epsilon = max(epsilon_min, epsilon * epsilon_decay)
             
             if global_step % TARGET_UPDATE == 0:
                 target_net.load_state_dict(policy_net.state_dict())
                 print(f" [Sync] Target Network Updated at step {global_step}")
-
+                
     avg_v_reward = np.mean(video_rewards) if video_rewards else 0
+    '''
+    #NOTE: its the mean of those (num_of_points * num_of frames) rewards, per step, for all points, in a video..
+    '''
     avg_v_loss = np.mean(video_losses) if video_losses else 0
     # NEW: Calculate how many points survived to the end of the video
     survival_rate = np.sum(active_points) / producer.num_points if producer.num_points > 0 else 0 

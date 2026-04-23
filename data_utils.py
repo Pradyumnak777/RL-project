@@ -15,18 +15,27 @@ create a state producer:
 '''
 
 class pointStateProducer:
-    def __init__(self, vid_path):
-        self.all_flows, self.start_points = get_optical_flow(vid_path) #start_points are the intiial points for this video!!
-        self.all_descriptors = get_dino_sscores(vid_path, self.all_flows, self.start_points)
+    def __init__(self, vid_name):
+        data_path = os.path.join("precomputed_data", vid_name.replace('.mp4', '.npz'))
+        if not os.path.exists(data_path):
+            raise FileNotFoundError(f"Missing precomputed data for {vid_name}")
 
+        data = np.load(data_path)
+        
+        self.all_flows = data['flows']
+        self.all_descriptors = data['descriptors']
+        self.fb_errors = data['fb_errors']
+        self.nb_errors = data['nb_errors']
+        try:
+            self.start_points = data['start_points']
+        except KeyError:
+            # main.py doesn't use this, so we can just set it to None 
+            # to avoid the crash.
+            self.start_points = None
+        
         self.num_frames = self.all_descriptors.shape[0]
         self.num_points = self.all_descriptors.shape[1]
-        
-        self.anchor_indices = np.zeros(self.num_points, dtype=int) #anchor is start frame, so all 0
-        
-        #getting the precomputed errors-
-        self.fb_errors = precompute_fb_errors(vid_path, self.all_flows, self.start_points)
-        self.nb_errors = precompute_neighborhood_errors(self.all_flows, self.start_points, radius=50)
+        self.anchor_indices = np.zeros(self.num_points, dtype=int)
         
     def get_state(self, point_idx, frame_idx):
         '''
@@ -48,7 +57,7 @@ class pointStateProducer:
         if np.isnan(dx):
             return None
         
-        return np.array([dx, dy, sim], dtype=np.float32)
+        return np.array([dx / 10.0, dy / 10.0, sim], dtype=np.float32) #normalization to help gradients..
 
     def update_anchor(self, point_idx, new_frame_idx):
         self.anchor_indices[point_idx] = new_frame_idx #change of anchor from initial frame to something else..
