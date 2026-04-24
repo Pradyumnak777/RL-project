@@ -8,15 +8,14 @@ import torch.optim as optim
 from model import DQN
 import torch.nn.functional as F
 
-
 BATCH_SIZE = 128
 GAMMA = 0.95           # Discount factor for future rewards
 LR = 1e-4              # Learning rate
 TARGET_UPDATE = 20000   # How many steps before syncing Policy -> Target
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-policy_net = DQN(state_dim=3, action_dim=3).to(device)
-target_net = DQN(state_dim=3, action_dim=3).to(device)
+policy_net = DQN(state_dim=5, action_dim=3).to(device)
+target_net = DQN(state_dim=5, action_dim=3).to(device)
 target_net.load_state_dict(policy_net.state_dict())
 target_net.eval() # Target net never trains via backprop, only copies weights after x steps..
 optimizer = optim.Adam(policy_net.parameters(), lr=LR)
@@ -43,7 +42,7 @@ def optimize_model():
     # V(s') = max_a Q(s', a)
     with torch.no_grad():
         next_states_non_final = torch.FloatTensor(np.array([
-            ns if ns is not None else np.zeros(3) for ns in next_state_batch
+            ns if ns is not None else np.zeros(5) for ns in next_state_batch
         ])).to(device)
         
         next_state_values = target_net(next_states_non_final).max(1)[0]
@@ -63,15 +62,29 @@ def optimize_model():
     
     return loss.item()
 
-def get_dqn_action(state_vector):
+def get_dqn_action(state_vector, can_reanchor=True):
     # Convert numpy array to torch tensor and add batch dimension
     state_t = torch.FloatTensor(state_vector).unsqueeze(0).to(device)
     
     with torch.no_grad():
         # Get Q-values from the Policy Net
         q_values = policy_net(state_t)
+        
+        if not can_reanchor:
+            # Set the Q-value for action 2 to negative infinity
+            # so argmax will NEVER pick it.
+            q_values[0, 2] = -float('inf')
+        
         # Pick the action with the highest expected reward
         return torch.argmax(q_values).item()
+    
+#for soft update
+
+TAU = 0.005 # Target network update rate
+
+def soft_update(target_net, policy_net, tau):
+    for target_param, policy_param in zip(target_net.parameters(), policy_net.parameters()):
+        target_param.data.copy_(tau * policy_param.data + (1.0 - tau) * target_param.data)
 
 class ReplayBuffer:
     def __init__(self, capacity=10000):
@@ -136,11 +149,18 @@ for vid_name in os.listdir(train_dir):
                 active_points[p_idx] = False
                 continue
             
+            #check budget for re-anchoring..
+            can_reanchor = producer.reanchor_counts[p_idx] < producer.max_reanchors
+            
             # 2. CHOOSE ACTION (Epsilon-Greedy)
             if random.random() < epsilon:
-                action = random.choice([0, 1, 2]) # Explore
+                if can_reanchor:
+                    action = random.choice([0, 1, 2]) # Full exploration
+                else:
+                    action = random.choice([0, 1])    # Restricted: Only Kill or Keep, not allowing "re-anchor"
             else:
-                action = get_dqn_action(state)    # Exploit (Policy)
+                # MUST pass the flag to the policy network
+                action = get_dqn_action(state, can_reanchor=can_reanchor)
                 
             video_actions[action] += 1 # NEW: Log the chosen action
             
@@ -176,6 +196,7 @@ for vid_name in os.listdir(train_dir):
             if global_step % 16 == 0: 
                 current_loss = optimize_model()
                 
+                
             if current_loss is not None:
                 video_losses.append(current_loss)
             
@@ -183,9 +204,13 @@ for vid_name in os.listdir(train_dir):
             # if global_step % 1000 == 0:
             #     epsilon = max(epsilon_min, epsilon * epsilon_decay)
             
-            if global_step % TARGET_UPDATE == 0:
-                target_net.load_state_dict(policy_net.state_dict())
-                print(f" [Sync] Target Network Updated at step {global_step}")
+            # if global_step % TARGET_UPDATE == 0:
+            #     target_net.load_state_dict(policy_net.state_dict())
+            #     print(f" [Sync] Target Network Updated at step {global_step}")
+            
+            if global_step % 2000 == 0:
+                soft_update(target_net, policy_net, TAU)
+                print(f" [Sync] Target Network Soft Updated at step {global_step}")
                 
     avg_v_reward = np.mean(video_rewards) if video_rewards else 0
     '''

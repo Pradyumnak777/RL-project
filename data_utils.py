@@ -15,7 +15,7 @@ create a state producer:
 '''
 
 class pointStateProducer:
-    def __init__(self, vid_name):
+    def __init__(self, vid_name, max_reanchors=2):
         data_path = os.path.join("precomputed_data", vid_name.replace('.mp4', '.npz'))
         if not os.path.exists(data_path):
             raise FileNotFoundError(f"Missing precomputed data for {vid_name}")
@@ -37,16 +37,25 @@ class pointStateProducer:
         self.num_points = self.all_descriptors.shape[1]
         self.anchor_indices = np.zeros(self.num_points, dtype=int)
         
+        self.max_reanchors = max_reanchors
+        self.reanchor_counts = np.zeros(self.num_points, dtype=int)
+        
     def get_state(self, point_idx, frame_idx):
         '''
-        this will return a state/feature vector, which is for now: [dx, dy, similarity]
+        this will return a state/feature vector, which is for now: [speed, similarity, fb_error, nb_error, budget_used]
         '''
         #getting dx, dy stuff
         
-        if frame_idx < self.all_flows.shape[0]:
+        # 1. Get dx, dy and Errors (Handle the boundary)
+        if frame_idx < self.all_flows.shape[0]: # Checks if we are within the N-1 limit
             dx, dy = self.all_flows[frame_idx, point_idx]
+            current_fb_err = self.fb_errors[frame_idx, point_idx]
+            current_nb_err = self.nb_errors[frame_idx, point_idx]
         else:
-            dx, dy = 0.0, 0.0 #if its the last frame
+            # We are at the very last frame; no more flow exists
+            dx, dy = 0.0, 0.0 
+            current_fb_err = 0.0
+            current_nb_err = 0.0
         
         #getting descriptors..
         current_desc = torch.from_numpy(self.all_descriptors[frame_idx, point_idx])
@@ -56,11 +65,24 @@ class pointStateProducer:
         sim = F.cosine_similarity(current_desc.unsqueeze(0), anchor_desc.unsqueeze(0)).item()
         if np.isnan(dx):
             return None
+
+        speed = np.sqrt(dx**2 + dy**2)
         
-        return np.array([dx / 10.0, dy / 10.0, sim], dtype=np.float32) #normalization to help gradients..
+        # Normalize the count between 0.0 and 1.0 to keep neural net inputs stable
+        budget_used = self.reanchor_counts[point_idx] / self.max_reanchors
+                
+        # State is now size 4: [dx, dy, sim, budget_used]
+        return np.array([
+            speed / 10.0, 
+            sim, 
+            np.clip(current_fb_err, 0, 5) / 5.0, 
+            np.clip(current_nb_err, 0, 5) / 5.0, 
+            budget_used
+        ], dtype=np.float32)
 
     def update_anchor(self, point_idx, new_frame_idx):
         self.anchor_indices[point_idx] = new_frame_idx #change of anchor from initial frame to something else..
+        self.reanchor_counts[point_idx] += 1
 
     def get_reward(self, point_idx, frame_idx, action):
         '''
@@ -83,12 +105,12 @@ class pointStateProducer:
         elif action == 2: # RE-ANCHOR
             # survival_bonus = 2
             # reanchor_cost = 1
-            return survival_bonus - 0.0 - 4.0
+            return survival_bonus - 0.0 - 3.0
 
         elif action == 0: # KILL
             # If the point was healthy (low error), killing it is a HUGE mistake.
             # This 'Opportunity Cost' forces the agent to keep points.
-            if total_error < 2.5: 
+            if total_error < 3.0: 
                 return -5.0 
             
             # If the point was actually bad, killing it is a 'Neutral Exit'

@@ -11,13 +11,13 @@ from func_utils import get_optical_flow, get_dino_sscores, precompute_fb_errors,
 
 # --- SETUP ---
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-test_vid_path = "UCF_Rep/val/v_BodyWeightSquats_g24_c01.mp4" 
+test_vid_path = "UCF_Rep/val/v_SoccerJuggling_g25_c03.mp4" 
 output_vid_path = "tracking_inference.mp4"
-model_path = "point_tracker_dqn.pth"
+model_path = "saved_runs/run_4_revamp/point_tracker_dqn.pth"
 
 # 1. Load the Trained Model
 print(f"Loading model from {model_path}...")
-policy_net = DQN(state_dim=3, action_dim=3).to(device)
+policy_net = DQN(state_dim=5, action_dim=3).to(device)
 policy_net.load_state_dict(torch.load(model_path, map_location=device))
 policy_net.eval()
 
