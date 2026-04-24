@@ -10,7 +10,7 @@ import torch.nn.functional as F
 
 
 BATCH_SIZE = 128
-GAMMA = 0.99           # Discount factor for future rewards
+GAMMA = 0.95           # Discount factor for future rewards
 LR = 1e-4              # Learning rate
 TARGET_UPDATE = 20000   # How many steps before syncing Policy -> Target
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -85,7 +85,7 @@ class ReplayBuffer:
 
 
 train_dir = "UCF_Rep/train"
-memory = ReplayBuffer(capacity=50000)
+memory = ReplayBuffer(capacity=100000)
 
 epsilon = 1.0          # Start with 100% random exploration
 epsilon_min = 0.05      # Never stop exploring completely
