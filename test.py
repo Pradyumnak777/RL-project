@@ -9,7 +9,7 @@ from func_utils import get_optical_flow, get_dino_sscores, precompute_fb_errors,
 
 # --- SETUP ---
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-test_vid_path = "UCF_Rep/val/v_JumpingJack_g24_c03.mp4" # Put your test video here
+test_vid_path = "UCF_Rep/val/v_PlayingViolin_g24_c03.mp4" # Put your test video here
 output_vid_path = "tracking_result.mp4"
 
 # 1. Load the Trained Brain

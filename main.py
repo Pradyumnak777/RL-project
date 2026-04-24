@@ -12,7 +12,7 @@ import torch.nn.functional as F
 BATCH_SIZE = 128
 GAMMA = 0.99           # Discount factor for future rewards
 LR = 1e-4              # Learning rate
-TARGET_UPDATE = 50000   # How many steps before syncing Policy -> Target
+TARGET_UPDATE = 20000   # How many steps before syncing Policy -> Target
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 policy_net = DQN(state_dim=3, action_dim=3).to(device)
@@ -180,8 +180,8 @@ for vid_name in os.listdir(train_dir):
                 video_losses.append(current_loss)
             
             #step additions..
-            if global_step % 1000 == 0:
-                epsilon = max(epsilon_min, epsilon * epsilon_decay)
+            # if global_step % 1000 == 0:
+            #     epsilon = max(epsilon_min, epsilon * epsilon_decay)
             
             if global_step % TARGET_UPDATE == 0:
                 target_net.load_state_dict(policy_net.state_dict())
@@ -203,6 +203,10 @@ for vid_name in os.listdir(train_dir):
 
     print(f"Done: {vid_name:20} | Rwd: {avg_v_reward:6.2f} | Loss: {avg_v_loss:6.4f} | Eps: {epsilon:.2f} | Surv: {survival_rate:.2f}")
 
+    #decaying epsilon..
+    epsilon = max(epsilon_min, epsilon * epsilon_decay)
+    
+    
 import json
 with open("training_stats.json", "w") as f:
     json.dump(stats, f)

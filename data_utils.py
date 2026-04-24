@@ -76,20 +76,22 @@ class pointStateProducer:
         total_error = np.clip(fb_err, 0, 5) + np.clip(nb_err, 0, 5)
 
         # 3. Action Logic
-        if action == 1 or action == 2: # KEEP or RE-ANCHOR
-            # SURVIVAL BONUS (e.g., 1.5) minus the penalty of being imprecise
-            survival_bonus = 1.5 
-            reward = survival_bonus - total_error
-            
-            if action == 2: # Small cost to re-anchor
-                reward -= 0.2
-            return reward
+        if action == 1: # KEEP
+            survival_bonus = 2
+            return survival_bonus - total_error
+
+        elif action == 2: # RE-ANCHOR
+            # survival_bonus = 2
+            # reanchor_cost = 1
+            return -1
 
         elif action == 0: # KILL
             # If the point was healthy (low error), killing it is a HUGE mistake.
             # This 'Opportunity Cost' forces the agent to keep points.
-            if total_error < 1.0: 
+            if total_error < 5.0: 
                 return -5.0 
             
             # If the point was actually bad, killing it is a 'Neutral Exit'
-            return 0.0
+            return -0.1
+
+        raise ValueError(f"Invalid action {action}. Expected one of [0, 1, 2].")
