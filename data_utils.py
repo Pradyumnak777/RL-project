@@ -71,7 +71,7 @@ class pointStateProducer:
         # Normalize the count between 0.0 and 1.0 to keep neural net inputs stable
         budget_used = self.reanchor_counts[point_idx] / self.max_reanchors
                 
-        # State is now size 4: [dx, dy, sim, budget_used]
+        # State is now size 4: [dx, dy, sim, fb_error, nb_error, budget_used]
         return np.array([
             speed / 10.0, 
             sim, 
@@ -100,7 +100,7 @@ class pointStateProducer:
         # 3. Action Logic
         survival_bonus = 2
         if action == 1: # KEEP
-            return survival_bonus - total_error
+            return survival_bonus - (0.5*total_error)
 
         elif action == 2: # RE-ANCHOR
             # survival_bonus = 2
@@ -110,7 +110,7 @@ class pointStateProducer:
         elif action == 0: # KILL
             # If the point was healthy (low error), killing it is a HUGE mistake.
             # This 'Opportunity Cost' forces the agent to keep points.
-            if total_error < 3.0: 
+            if total_error < 6.0: 
                 return -5.0 
             
             # If the point was actually bad, killing it is a 'Neutral Exit'
