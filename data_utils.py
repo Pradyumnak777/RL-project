@@ -15,8 +15,8 @@ create a state producer:
 '''
 
 class pointStateProducer:
-    def __init__(self, vid_name, max_reanchors=2):
-        data_path = os.path.join("precomputed_data", vid_name.replace('.mp4', '.npz'))
+    def __init__(self, vid_name, max_reanchors=2, data_dir="precomputed_data_new"):
+        data_path = os.path.join(data_dir, vid_name.replace('.mp4', '.npz'))
         if not os.path.exists(data_path):
             raise FileNotFoundError(f"Missing precomputed data for {vid_name}")
 
@@ -95,22 +95,27 @@ class pointStateProducer:
         # 2. Get Errors
         fb_err = self.fb_errors[frame_idx, point_idx]
         nb_err = self.nb_errors[frame_idx, point_idx]
-        total_error = np.clip(fb_err, 0, 5) + np.clip(nb_err, 0, 5)
+        w_fb = 0.8  # Primary focus: Cycle Consistency
+        w_nb = 0.2  # Secondary focus: Neighborhood Consensus
+
+        # Calculate weighted error
+        total_error = (w_fb * np.clip(fb_err, 0, 5)) + (w_nb * np.clip(nb_err, 0, 5))
+        # total_error = np.clip(fb_err, 0, 5) + np.clip(nb_err, 0, 5)
 
         # 3. Action Logic
-        survival_bonus = 2
+        survival_bonus = 1.8
         if action == 1: # KEEP
-            return survival_bonus - (0.5*total_error)
+            return survival_bonus - total_error
 
         elif action == 2: # RE-ANCHOR
             # survival_bonus = 2
             # reanchor_cost = 1
-            return survival_bonus - 0.0 - 3.0
+            return (survival_bonus - 0.2) - total_error
 
         elif action == 0: # KILL
             # If the point was healthy (low error), killing it is a HUGE mistake.
             # This 'Opportunity Cost' forces the agent to keep points.
-            if total_error < 6.0: 
+            if total_error < 3.0: 
                 return -5.0 
             
             # If the point was actually bad, killing it is a 'Neutral Exit'

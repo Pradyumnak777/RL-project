@@ -44,35 +44,41 @@ def get_optical_flow(vid_path, point_sampling_algo = None):
 
         prev_gray = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
         points = sample_points(prev_gray)
-        start_points = points
+        
+        # CRITICAL FIX 1: Freeze the starting points in memory!
+        start_points = points.copy() 
+
+        # CRITICAL FIX 2: The Permanent Death Mask
+        is_alive = np.ones(len(points), dtype=bool)
 
         while True:
             ret2, frame2 = vid_1.read()
-
             if not ret2:
                 break
 
             gray2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
 
-            if points is None or len(points) == 0:
-                points = sample_points(prev_gray)
-
-            if points is None or len(points) == 0:
-                flow_vectors.append(np.empty((0, 2), dtype=np.float32))
-                prev_gray = gray2
-                continue
-
             next_points, status, _ = cv2.calcOpticalFlowPyrLK(prev_gray, gray2, points, None)
 
             frame_flow = np.full((points.shape[0], 2), np.nan, dtype=np.float32)
+            
             if next_points is not None and status is not None:
+                # 1. Check who survived THIS frame
+                survived_this_frame = status.reshape(-1) == 1
+                
+                # 2. Update the master mask: Must be alive previously AND alive now
+                is_alive = is_alive & survived_this_frame
+                
+                # 3. Only calculate flow for permanently ALIVE points
                 p0 = points.reshape(-1, 2)
                 p1 = next_points.reshape(-1, 2)
-                valid = status.reshape(-1) == 1
-                frame_flow[valid] = p1[valid] - p0[valid]
-                points = next_points[valid].reshape(-1, 1, 2)
+                
+                frame_flow[is_alive] = p1[is_alive] - p0[is_alive]
+                
+                # 4. Update coordinates in place, ONLY for living points
+                points[is_alive] = next_points[is_alive].reshape(-1, 1, 2)
             else:
-                points = None
+                is_alive[:] = False # Everything dies if optical flow completely fails
 
             flow_vectors.append(frame_flow)
             prev_gray = gray2
