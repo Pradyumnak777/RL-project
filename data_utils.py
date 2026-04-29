@@ -83,7 +83,7 @@ class pointStateProducer:
     def update_anchor(self, point_idx, new_frame_idx):
         self.anchor_indices[point_idx] = new_frame_idx #change of anchor from initial frame to something else..
         self.reanchor_counts[point_idx] += 1
-
+        
     def get_reward(self, point_idx, frame_idx, action):
         '''
         reward is a combination of cycle consistency and neighborhood consensus.
@@ -122,3 +122,42 @@ class pointStateProducer:
             return 0.0
 
         raise ValueError(f"Invalid action {action}. Expected one of [0, 1, 2].")
+
+    # def get_reward(self, point_idx, frame_idx, action):
+    #     '''
+    #     reward is a combination of cycle consistency and neighborhood consensus.
+    #     '''
+    #     # 1. Physical Failure (Point lost by OpenCV)
+    #     if np.isnan(self.all_flows[frame_idx, point_idx, 0]):
+    #         return -5.0 if action != 0 else 0.0 # Heavy penalty for failing to predict the crash
+
+    #     # 2. Get Errors
+    #     fb_err = self.fb_errors[frame_idx, point_idx]
+    #     nb_err = self.nb_errors[frame_idx, point_idx]
+    #     w_fb = 0.8  # Primary focus: Cycle Consistency
+    #     w_nb = 0.2  # Secondary focus: Neighborhood Consensus
+
+    #     # Calculate weighted error
+    #     total_error = (w_fb * np.clip(fb_err, 0, 5)) + (w_nb * np.clip(nb_err, 0, 5))
+    #     # total_error = np.clip(fb_err, 0, 5) + np.clip(nb_err, 0, 5)
+
+    #     # 3. Action Logic
+    #     survival_bonus = 1.8
+    #     if action == 1: # KEEP
+    #         return survival_bonus - total_error
+
+    #     elif action == 2: # RE-ANCHOR
+    #         # survival_bonus = 2
+    #         # reanchor_cost = 1
+    #         return (survival_bonus - 0.2) - total_error
+
+    #     elif action == 0: # KILL
+    #         # If the point was healthy (low error), killing it is a HUGE mistake.
+    #         # This 'Opportunity Cost' forces the agent to keep points.
+    #         if total_error < 3.0: 
+    #             return -5.0 
+            
+    #         # If the point was actually bad, killing it is a 'Neutral Exit'
+    #         return 0.0
+
+    #     raise ValueError(f"Invalid action {action}. Expected one of [0, 1, 2].")

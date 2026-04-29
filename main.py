@@ -126,7 +126,7 @@ for vid_name in os.listdir(train_dir):
     
     print(f"Processing Video: {vid_name}")
     # Initialize the environment for THIS video
-    producer = pointStateProducer(vid_name)
+    producer = pointStateProducer(vid_name, data_dir="precomputed_data_old")
     
     # True = Alive, False = Killed by Agent or lost by OpenCV
     active_points = np.ones(producer.num_points, dtype=bool)

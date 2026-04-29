@@ -11,7 +11,7 @@ from func_utils import (
 
 # Configuration
 train_dir = "UCF_Rep/train"
-save_dir = "precomputed_data_new"
+save_dir = "precomputed_data_old"
 
 # Create the save directory if it doesn't exist
 if not os.path.exists(save_dir):
