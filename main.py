@@ -14,8 +14,8 @@ LR = 1e-4              # Learning rate
 TARGET_UPDATE = 20000   # How many steps before syncing Policy -> Target
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-policy_net = DQN(state_dim=5, action_dim=3).to(device)
-target_net = DQN(state_dim=5, action_dim=3).to(device)
+policy_net = DQN(state_dim=4, action_dim=3).to(device)
+target_net = DQN(state_dim=4, action_dim=3).to(device)
 target_net.load_state_dict(policy_net.state_dict())
 target_net.eval() # Target net never trains via backprop, only copies weights after x steps..
 optimizer = optim.Adam(policy_net.parameters(), lr=LR)
@@ -42,7 +42,7 @@ def optimize_model():
     # V(s') = max_a Q(s', a)
     with torch.no_grad():
         next_states_non_final = torch.FloatTensor(np.array([
-            ns if ns is not None else np.zeros(5) for ns in next_state_batch
+            ns if ns is not None else np.zeros(4) for ns in next_state_batch
         ])).to(device)
         
         next_state_values = target_net(next_states_non_final).max(1)[0]

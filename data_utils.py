@@ -15,7 +15,7 @@ create a state producer:
 '''
 
 class pointStateProducer:
-    def __init__(self, vid_name, max_reanchors=2, data_dir="precomputed_data_new"):
+    def __init__(self, vid_name, max_reanchors=2, data_dir="precomputed_data_old"):
         data_path = os.path.join(data_dir, vid_name.replace('.mp4', '.npz'))
         if not os.path.exists(data_path):
             raise FileNotFoundError(f"Missing precomputed data for {vid_name}")
@@ -76,7 +76,7 @@ class pointStateProducer:
             speed / 10.0, 
             sim, 
             np.clip(current_fb_err, 0, 5) / 5.0, 
-            np.clip(current_nb_err, 0, 5) / 5.0, 
+            # np.clip(current_nb_err, 0, 5) / 5.0, #NOTE: removing this..
             budget_used
         ], dtype=np.float32)
 
@@ -94,34 +94,39 @@ class pointStateProducer:
 
         # 2. Get Errors
         fb_err = self.fb_errors[frame_idx, point_idx]
-        nb_err = self.nb_errors[frame_idx, point_idx]
-        w_fb = 0.8  # Primary focus: Cycle Consistency
-        w_nb = 0.2  # Secondary focus: Neighborhood Consensus
+        
+        is_physically_stable = fb_err < 2.0
+        
+        state = self.get_state(point_idx, frame_idx)
+        similarity = state[1] 
+        looks_like_anchor = similarity > 0.9
 
-        # Calculate weighted error
-        total_error = (w_fb * np.clip(fb_err, 0, 5)) + (w_nb * np.clip(nb_err, 0, 5))
-        # total_error = np.clip(fb_err, 0, 5) + np.clip(nb_err, 0, 5)
-
-        # 3. Action Logic
-        survival_bonus = 1.8
         if action == 1: # KEEP
-            return survival_bonus - total_error
+            # Best case: Stable and looks correct
+            if is_physically_stable and looks_like_anchor:
+                return 1.0
+            # Danger case: Stable physics but appearance is drifting
+            elif is_physically_stable and not looks_like_anchor:
+                return -1.0 # but tells the agent "something is wrong"
+            else:
+                return -2.0 # Physics failed, keeping is a mistake
 
-        elif action == 2: # RE-ANCHOR
-            # survival_bonus = 2
-            # reanchor_cost = 1
-            return (survival_bonus - 0.2) - total_error
+        elif action == 2: # RE-ANCHOR (The "Rescue" Decision)
+            # The Sweet Spot: Physics are good, but appearance is drifting.
+            # This is the "Alternative to Death" you were thinking of!
+            if is_physically_stable and not looks_like_anchor:
+                return 1.2 # High reward for a well-timed rescue!
+            elif is_physically_stable and looks_like_anchor:
+                return -0.2 # Allowed, but wasteful to use a budget if sim is already high
+            else:
+                return -5.0 # Cannot re-anchor a point with broken physics
 
         elif action == 0: # KILL
-            # If the point was healthy (low error), killing it is a HUGE mistake.
-            # This 'Opportunity Cost' forces the agent to keep points.
-            if total_error < 3.0: 
-                return -5.0 
-            
-            # If the point was actually bad, killing it is a 'Neutral Exit'
-            return 0.0
-
-        raise ValueError(f"Invalid action {action}. Expected one of [0, 1, 2].")
+            # If it's physically broken OR semantically drifting, allow the 0.1 exit.
+            if not is_physically_stable or not looks_like_anchor:
+                return 0.1 
+            else:
+                return -5.0 # ONLY punish if the point is physically AND visually perfect
 
     # def get_reward(self, point_idx, frame_idx, action):
     #     '''

@@ -16,7 +16,7 @@ model_path = "point_tracker_dqn.pth"
 
 # 1. Load the Trained Model
 print(f"Loading model from {model_path}...")
-policy_net = DQN(state_dim=5, action_dim=3).to(device)
+policy_net = DQN(state_dim=4, action_dim=3).to(device)
 policy_net.load_state_dict(torch.load(model_path, map_location=device))
 policy_net.eval()
 
