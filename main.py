@@ -14,6 +14,28 @@ LR = 1e-4              # Learning rate
 TARGET_UPDATE = 20000   # How many steps before syncing Policy -> Target
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+SEED = 42
+
+
+def set_seed(seed):
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    try:
+        torch.use_deterministic_algorithms(True)
+    except Exception:
+        pass
+
+
+set_seed(SEED)
+
 policy_net = DQN(state_dim=4, action_dim=3).to(device)
 target_net = DQN(state_dim=4, action_dim=3).to(device)
 target_net.load_state_dict(policy_net.state_dict())
@@ -114,11 +136,20 @@ global_step = 0       # Tracks total actions taken across all videos
 run a loop over the training folder/training videos
 '''
 stats = {
+    "episode_rewards": [],
+    "episode_lengths": [],
     "avg_rewards": [],
     "avg_losses": [],
     "epsilon_history": [],
-    "survival_rates": [],          # NEW: Tracks point survival percentage
-    "action_distributions": []     # NEW: Tracks how often each action is picked
+    "survival_rates": [],
+    "action_distributions": []
+}
+
+stats_new = {
+    "episode_rewards": [],  # Total reward per point lifecycle
+    "episode_lengths": [],  # How many frames each point survived
+    "avg_rewards": [],      # Keeping video-level for comparison
+    "action_distributions": []
 }
 
 for vid_name in os.listdir(train_dir):
@@ -130,6 +161,9 @@ for vid_name in os.listdir(train_dir):
     
     # True = Alive, False = Killed by Agent or lost by OpenCV
     active_points = np.ones(producer.num_points, dtype=bool)
+    
+    point_rewards = np.zeros(producer.num_points) 
+    point_lengths = np.zeros(producer.num_points)
     
     video_rewards = []
     video_losses = []
@@ -175,6 +209,10 @@ for vid_name in os.listdir(train_dir):
             reward = producer.get_reward(p_idx, t, action)
             video_rewards.append(reward) # Collect reward
             
+            #below for new_stats
+            point_rewards[p_idx] += reward
+            point_lengths[p_idx] += 1
+            
             # 5. GET NEXT STATE (s')
             # If we killed it, there is no next state
             if action == 0:
@@ -184,8 +222,12 @@ for vid_name in os.listdir(train_dir):
                 next_state = producer.get_state(p_idx, t + 1)
                 # It's 'done' if the next state is None (OpenCV loses it next frame)
                 done = (next_state is None) 
-                if done:
-                    active_points[p_idx] = False
+            
+            if done:
+                active_points[p_idx] = False
+                #NOTE: below for new_stats
+                stats["episode_rewards"].append(float(point_rewards[p_idx]))
+                stats["episode_lengths"].append(int(point_lengths[p_idx]))
 
             # 6. STORE IN MEMORY
             memory.push(state, action, reward, next_state, done)
@@ -212,6 +254,11 @@ for vid_name in os.listdir(train_dir):
                 soft_update(target_net, policy_net, TAU)
                 print(f" [Sync] Target Network Soft Updated at step {global_step}")
                 
+    for p_idx in range(producer.num_points):
+        if active_points[p_idx]:
+            stats["episode_rewards"].append(float(point_rewards[p_idx]))
+            stats["episode_lengths"].append(int(point_lengths[p_idx]))    
+            
     avg_v_reward = np.mean(video_rewards) if video_rewards else 0
     '''
     #NOTE: its the mean of those (num_of_points * num_of frames) rewards, per step, for all points, in a video..
@@ -233,7 +280,7 @@ for vid_name in os.listdir(train_dir):
     
     
 import json
-with open("training_stats.json", "w") as f:
+with open("training_stats_new.json", "w") as f:
     json.dump(stats, f)
 
 model_save_path = "point_tracker_dqn.pth"
