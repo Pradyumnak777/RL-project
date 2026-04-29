@@ -65,7 +65,7 @@ if len(episode_rewards) > 0:
     if ep_window > 0:
         plt.plot(np.arange(ep_window-1, len(episode_rewards)), moving_average(episode_rewards, ep_window), 
                  color='blue', linewidth=2, label=f'{ep_window}-Ep Avg')
-    plt.title("Individual Point Lifecycles: Reward Evolution", fontsize=14)
+    plt.title("Return per episode", fontsize=14)
     plt.xlabel("Episodes (Individual Points Processed)")
     plt.ylabel("Total Accumulated Reward")
     plt.legend()
@@ -81,7 +81,7 @@ if len(episode_lengths) > 0:
     if ep_window > 0:
         plt.plot(np.arange(ep_window-1, len(episode_lengths)), moving_average(episode_lengths, ep_window), 
                  color='purple', linewidth=2, label=f'{ep_window}-Ep Avg')
-    plt.title("Individual Point Lifecycles: Lifespan Evolution", fontsize=14)
+    plt.title("Episode length of each point (numnber of frames survived)", fontsize=14)
     plt.xlabel("Episodes (Individual Points Processed)")
     plt.ylabel("Frames Survived")
     plt.legend()
@@ -96,7 +96,7 @@ plt.plot(videos, avg_rewards, alpha=0.3, color='blue', label='Raw Video Avg Rewa
 if vid_window > 0:
     plt.plot(np.arange(vid_window-1, len(avg_rewards)), moving_average(avg_rewards, vid_window), 
              color='darkblue', linewidth=2, label=f'{vid_window}-Vid Avg')
-plt.title("DQN Video-Level Reward Convergence", fontsize=14)
+plt.title("DQN Video-Level Reward plot", fontsize=14)
 plt.xlabel("Videos Processed")
 plt.ylabel("Average Reward per Video")
 plt.legend()
