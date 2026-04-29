@@ -99,7 +99,7 @@ class pointStateProducer:
         
         state = self.get_state(point_idx, frame_idx)
         similarity = state[1] 
-        looks_like_anchor = similarity > 0.9
+        looks_like_anchor = similarity > 0.95
 
         if action == 1: # KEEP
             # Best case: Stable and looks correct
