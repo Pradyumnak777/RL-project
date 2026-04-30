@@ -99,15 +99,15 @@ class pointStateProducer:
         
         state = self.get_state(point_idx, frame_idx)
         similarity = state[1] 
-        looks_like_anchor = similarity > 0.95
+        looks_like_anchor = similarity > 0.92
 
         if action == 1: # KEEP
             # Best case: Stable and looks correct
             if is_physically_stable and looks_like_anchor:
-                return 1.0
+                return 2.0
             # Danger case: Stable physics but appearance is drifting
             elif is_physically_stable and not looks_like_anchor:
-                return -1.0 # but tells the agent "something is wrong"
+                return -0.5 # but tells the agent "something is wrong"
             else:
                 return -2.0 # Physics failed, keeping is a mistake
 
@@ -124,7 +124,7 @@ class pointStateProducer:
         elif action == 0: # KILL
             # If it's physically broken OR semantically drifting, allow the 0.1 exit.
             if not is_physically_stable or not looks_like_anchor:
-                return 0.1 
+                return 0.05 
             else:
                 return -5.0 # ONLY punish if the point is physically AND visually perfect
 

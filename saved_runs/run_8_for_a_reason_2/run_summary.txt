@@ -1,0 +1,113 @@
+Run Summary
+===========
+Created at: 2026-04-29 19:36:40 EDT
+Run folder: /scratch/pbk5339/rl_project/saved_runs/run_8_for_a_reason_2
+
+Copied Artifacts
+----------------
+- training_stats.json
+- point_tracker_dqn.pth
+- plot_actions.png
+- plot_episode_lengths.png
+- plot_episode_rewards.png
+- plot_loss_epsilon.png
+- plot_rewards.png
+- plot_survival.png
+- plot_video_rewards.png
+- plot_video_survival.png
+
+Training Configuration (from main.py)
+-------------------------------------
+BATCH_SIZE: 128
+GAMMA: 0.95           # Discount factor for future rewards
+LR: 1e-4              # Learning rate
+TARGET_UPDATE: 20000   # How many steps before syncing Policy -> Target
+epsilon: 1.0          # Start with 100% random exploration
+epsilon_min: 0.05      # Never stop exploring completely
+epsilon_decay: 0.99  # Multiply epsilon by this after every video
+ReplayBuffer capacity: 100000
+
+Reward Design (from data_utils.py:get_reward)
+----------------------------------------------
+    def get_reward(self, point_idx, frame_idx, action):
+        '''
+        reward is a combination of cycle consistency and neighborhood consensus.
+        '''
+        # 1. Physical Failure (Point lost by OpenCV)
+        if np.isnan(self.all_flows[frame_idx, point_idx, 0]):
+            return -5.0 if action != 0 else 0.0 # Heavy penalty for failing to predict the crash
+
+        # 2. Get Errors
+        fb_err = self.fb_errors[frame_idx, point_idx]
+        
+        is_physically_stable = fb_err < 2.0
+        
+        state = self.get_state(point_idx, frame_idx)
+        similarity = state[1] 
+        looks_like_anchor = similarity > 0.92
+
+        if action == 1: # KEEP
+            # Best case: Stable and looks correct
+            if is_physically_stable and looks_like_anchor:
+                return 2.0
+            # Danger case: Stable physics but appearance is drifting
+            elif is_physically_stable and not looks_like_anchor:
+                return -0.5 # but tells the agent "something is wrong"
+            else:
+                return -2.0 # Physics failed, keeping is a mistake
+
+        elif action == 2: # RE-ANCHOR (The "Rescue" Decision)
+            # The Sweet Spot: Physics are good, but appearance is drifting.
+            # This is the "Alternative to Death" you were thinking of!
+            if is_physically_stable and not looks_like_anchor:
+                return 1.2 # High reward for a well-timed rescue!
+            elif is_physically_stable and looks_like_anchor:
+                return -0.2 # Allowed, but wasteful to use a budget if sim is already high
+            else:
+                return -5.0 # Cannot re-anchor a point with broken physics
+
+        elif action == 0: # KILL
+            # If it's physically broken OR semantically drifting, allow the 0.1 exit.
+            if not is_physically_stable or not looks_like_anchor:
+                return 0.05 
+            else:
+                return -5.0 # ONLY punish if the point is physically AND visually perfect
+
+    # def get_reward(self, point_idx, frame_idx, action):
+    #     '''
+    #     reward is a combination of cycle consistency and neighborhood consensus.
+    #     '''
+    #     # 1. Physical Failure (Point lost by OpenCV)
+    #     if np.isnan(self.all_flows[frame_idx, point_idx, 0]):
+    #         return -5.0 if action != 0 else 0.0 # Heavy penalty for failing to predict the crash
+
+    #     # 2. Get Errors
+    #     fb_err = self.fb_errors[frame_idx, point_idx]
+    #     nb_err = self.nb_errors[frame_idx, point_idx]
+    #     w_fb = 0.8  # Primary focus: Cycle Consistency
+    #     w_nb = 0.2  # Secondary focus: Neighborhood Consensus
+
+    #     # Calculate weighted error
+    #     total_error = (w_fb * np.clip(fb_err, 0, 5)) + (w_nb * np.clip(nb_err, 0, 5))
+    #     # total_error = np.clip(fb_err, 0, 5) + np.clip(nb_err, 0, 5)
+
+    #     # 3. Action Logic
+    #     survival_bonus = 1.8
+    #     if action == 1: # KEEP
+    #         return survival_bonus - total_error
+
+    #     elif action == 2: # RE-ANCHOR
+    #         # survival_bonus = 2
+    #         # reanchor_cost = 1
+    #         return (survival_bonus - 0.2) - total_error
+
+    #     elif action == 0: # KILL
+    #         # If the point was healthy (low error), killing it is a HUGE mistake.
+    #         # This 'Opportunity Cost' forces the agent to keep points.
+    #         if total_error < 3.0: 
+    #             return -5.0 
+            
+    #         # If the point was actually bad, killing it is a 'Neutral Exit'
+    #         return 0.0
+
+    #     raise ValueError(f"Invalid action {action}. Expected one of [0, 1, 2].")
