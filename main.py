@@ -124,9 +124,24 @@ memory = ReplayBuffer(capacity=100000)
 
 epsilon = 1.0          # Start with 100% random exploration
 epsilon_min = 0.05      # Never stop exploring completely
-epsilon_decay = 0.99  # Multiply epsilon by this after every video
+epsilon_decay = 0.95  # Multiply epsilon by this after every video
 global_step = 0       # Tracks total actions taken across all videos
 
+
+# 1. Get the full list of videos
+all_videos = os.listdir(train_dir)
+
+# 2. Sort the videos (optional, but ensures consistent runs)
+all_videos.sort()
+
+# 3. Define the subset size
+SUBSET_SIZE = len(all_videos)
+
+# 4. Slice the list to get only the first 50 videos
+# subset_videos = all_videos[:SUBSET_SIZE]
+subset_videos = random.sample(all_videos, SUBSET_SIZE)
+
+print(f"Training on a subset of {len(subset_videos)} videos...")
 
 # def get_dqn_action(state_vector):
 #     # For now, just pretend the DQN is guessing
@@ -152,7 +167,7 @@ stats_new = {
     "action_distributions": []
 }
 
-for vid_name in os.listdir(train_dir):
+for vid_name in subset_videos:
     # vid_path = os.path.join(train_dir, vid_name)
     
     print(f"Processing Video: {vid_name}")

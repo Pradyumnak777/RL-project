@@ -84,6 +84,24 @@ class pointStateProducer:
         self.anchor_indices[point_idx] = new_frame_idx #change of anchor from initial frame to something else..
         self.reanchor_counts[point_idx] += 1
         
+    def get_frame_mean_similarity(self, frame_idx):
+        # 1. Get current descriptors for ALL points [N_points, Dim]
+        curr_descs = torch.from_numpy(self.all_descriptors[frame_idx])
+        
+        # 2. Get the specific anchor descriptors for ALL points
+        # self.anchor_indices stores which frame each point is anchored to
+        anchor_indices = self.anchor_indices
+        point_indices = np.arange(self.num_points)
+        
+        # This pulls the correct anchor descriptor for each point
+        anch_descs = torch.from_numpy(self.all_descriptors[anchor_indices, point_indices])
+        
+        # 3. Calculate all similarities at once
+        all_sims = F.cosine_similarity(curr_descs, anch_descs)
+        
+        # 4. Return the average (ignoring NaNs if necessary)
+        return torch.mean(all_sims).item()
+        
     def get_reward(self, point_idx, frame_idx, action):
         '''
         reward is a combination of cycle consistency and neighborhood consensus.
@@ -92,41 +110,39 @@ class pointStateProducer:
         if np.isnan(self.all_flows[frame_idx, point_idx, 0]):
             return -5.0 if action != 0 else 0.0 # Heavy penalty for failing to predict the crash
 
-        # 2. Get Errors
-        fb_err = self.fb_errors[frame_idx, point_idx]
+        # # 2. Get Errors
+        # fb_err = self.fb_errors[frame_idx, point_idx]
         
-        is_physically_stable = fb_err < 2.0
+        # is_physically_stable = fb_err < 1.5
         
         state = self.get_state(point_idx, frame_idx)
-        similarity = state[1] 
-        looks_like_anchor = similarity > 0.92
-
+        similarity = np.clip(state[1], 0.0, 1.0)
+        fb_err = self.fb_errors[frame_idx, point_idx]
+        norm_err = np.clip(fb_err, 0.0, 5.0) / 5.0 # E: 0 to 1
+        
+        is_final_step = (frame_idx == self.num_frames - 2)
+        frame_mean = self.get_frame_mean_similarity(frame_idx)
+        
         if action == 1: # KEEP
-            # Best case: Stable and looks correct
-            if is_physically_stable and looks_like_anchor:
-                return 2.0
-            # Danger case: Stable physics but appearance is drifting
-            elif is_physically_stable and not looks_like_anchor:
-                return -0.5 # but tells the agent "something is wrong"
-            else:
-                return -2.0 # Physics failed, keeping is a mistake
+            # The 'Advantage': How much better am I than my peers?
+            # If I am at 0.98 and the average is 0.90, reward is high.
+            # If I am at 0.85 and the average is 0.90, I am drifting!
+            advantage = similarity - frame_mean
+            
+            reward = (advantage * 5.0) - (norm_err * 3.0)
+            if is_final_step:
+                reward += 15.0 * similarity * (1.0 - norm_err)
+            return reward
 
-        elif action == 2: # RE-ANCHOR (The "Rescue" Decision)
-            # The Sweet Spot: Physics are good, but appearance is drifting.
-            # This is the "Alternative to Death" you were thinking of!
-            if is_physically_stable and not looks_like_anchor:
-                return 1.2 # High reward for a well-timed rescue!
-            elif is_physically_stable and looks_like_anchor:
-                return -0.2 # Allowed, but wasteful to use a budget if sim is already high
-            else:
-                return -5.0 # Cannot re-anchor a point with broken physics
+        elif action == 2: # RE-ANCHOR
+            # Use the re-anchor to jump back to 1.0 similarity
+            # Reward is based on how much 'better' than the average you become
+            return (1.0 - frame_mean) - (norm_err * 5.0) - 0.5
 
         elif action == 0: # KILL
-            # If it's physically broken OR semantically drifting, allow the 0.1 exit.
-            if not is_physically_stable or not looks_like_anchor:
-                return 0.05 
-            else:
-                return -5.0 # ONLY punish if the point is physically AND visually perfect
+            # Bounty triggers if you are performing WORSE than the average
+            advantage = similarity - frame_mean
+            return (norm_err * 3.0) - (advantage * 5.0) - 1.0
 
     # def get_reward(self, point_idx, frame_idx, action):
     #     '''

@@ -42,7 +42,7 @@ if not avg_rewards:
 videos = np.arange(len(avg_rewards))
 episodes = np.arange(len(episode_rewards))
 
-vid_window = min(20, len(avg_rewards))
+vid_window = min(5, len(avg_rewards))
 # Use a much larger window for episodes because there are hundreds of thousands of them
 ep_window = min(1000, len(episode_rewards)) if len(episode_rewards) > 0 else 0
 
@@ -70,6 +70,7 @@ if len(episode_rewards) > 0:
     plt.ylabel("Total Accumulated Reward")
     plt.legend()
     plt.grid(True, alpha=0.3)
+    # plt.ylim(-2, 2)
     plt.savefig("plot_episode_rewards.png", dpi=300, bbox_inches='tight')
     plt.close()
     print("Saved: plot_episode_rewards.png")
