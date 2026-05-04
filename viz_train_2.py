@@ -42,7 +42,7 @@ if not avg_rewards:
 videos = np.arange(len(avg_rewards))
 episodes = np.arange(len(episode_rewards))
 
-vid_window = min(5, len(avg_rewards))
+vid_window = min(10, len(avg_rewards))
 # Use a much larger window for episodes because there are hundreds of thousands of them
 ep_window = min(1000, len(episode_rewards)) if len(episode_rewards) > 0 else 0
 

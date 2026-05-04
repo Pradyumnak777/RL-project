@@ -10,8 +10,8 @@ from func_utils import (
 )
 
 # Configuration
-train_dir = "UCF_Rep/train"
-save_dir = "precomputed_data_old"
+train_dir = "UCF_Rep/val"
+save_dir = "precomputed_data_testing"
 
 # Create the save directory if it doesn't exist
 if not os.path.exists(save_dir):
