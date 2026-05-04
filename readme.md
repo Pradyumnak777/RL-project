@@ -1,8 +1,6 @@
 # Reinforcement Learning Final Project
 
-
-### TO-DO
-- Get an image og the starting points for an example for the slides (image from cv2.goodpoints to track)
-- Draw a flowchart
-- Verify graphs, see what else you can show
-- Seems like my thing is "multi-agent". Verify and undestand how to showcase this.
+- Create the environment using the `requirements.txt` file
+- Install the UCF_Rep dataset (Please follow instructions listed in this Repo: https://github.com/Xiaodomgdomg/Deep-Temporal-Repetition-Counting)
+- Then, after setting everything up, run `main.py` to commence the training. This will output some plots, and the DQN model as a `.pth` file
+- If you wish to perform testing on the entire validation dataset of UCF_Rep, run `test_val_data.py`. After the JSON file is generated,run the cells in `test_val.ipynb` to get the plots for validation purposes 
